@@ -194,8 +194,9 @@ def create_draft_service():
     data = request.get_json()
     
     # Get parameters
-    width = data.get('width', 1080)
-    height = data.get('height', 1920)
+    draft_id = data.get('draft_id')  # New: get draft_id from request
+    width = data.get('width', 1920)
+    height = data.get('height', 1080)
     
     result = {
         "success": False,
@@ -203,9 +204,15 @@ def create_draft_service():
         "error": ""
     }
     
+    # Validate required parameters
+    if not draft_id:
+        error_message = "Hi, the required parameter 'draft_id' is missing. Please add it and try again."
+        result["error"] = error_message
+        return jsonify(result)
+    
     try:
-        # Create new draft
-        script, draft_id = create_draft(width=width, height=height)
+        # Create new draft with specified draft_id
+        script, draft_id = create_draft(draft_id=draft_id, width=width, height=height)
         
         result["success"] = True
         result["output"] = {
