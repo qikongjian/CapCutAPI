@@ -12,8 +12,8 @@ from create_draft import get_or_create_draft
 def add_video_track(
     video_url: str,
     draft_folder: Optional[str] = None,
-    width: int = 1080,
-    height: int = 1920,
+    width: int = 1920,
+    height: int = 1080,
     start: float = 0,
     end: Optional[float] = None,
     target_start: float = 0,

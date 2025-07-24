@@ -74,8 +74,8 @@ python capcut_server.py
 ```python
 import requests
 
-response = requests.post("http://localhost:9000/add_video", json={
-    "video_url": "http://example.com/video.mp4",
+response = requests.post("http://localhost:9001/add_video", json={
+    "video_url": "https://cdn.qikongjian.com/1753013542.mp4",
     "start": 0,
     "end": 10,
     "width": 1080,
@@ -90,7 +90,7 @@ print(response.json())
 ```python
 import requests
 
-response = requests.post("http://localhost:9000/add_text", json={
+response = requests.post("http://localhost:9001/add_text", json={
     "text": "你好，世界！",
     "start": 0,
     "end": 3,
@@ -107,7 +107,7 @@ print(response.json())
 ```python
 import requests
 
-response = requests.post("http://localhost:9000/save_draft", json={
+response = requests.post("http://localhost:9001/save_draft", json={
     "draft_id": "123456",
     "draft_folder":"your capcut draft folder"
 })

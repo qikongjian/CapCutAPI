@@ -3,11 +3,11 @@ import pyJianYingDraft as draft
 import time
 from draft_cache import DRAFT_CACHE, update_cache
 
-def create_draft(width=1080, height=1920):
+def create_draft(width=1920, height=1080):
     """
     Create new CapCut draft
-    :param width: Video width, default 1080
-    :param height: Video height, default 1920
+    :param width: Video width, default 1920
+    :param height: Video height, default 1080
     :return: (draft_name, draft_path, draft_id, draft_url)
     """
     # Generate timestamp and draft_id
@@ -23,7 +23,7 @@ def create_draft(width=1080, height=1920):
     
     return script, draft_id
 
-def get_or_create_draft(draft_id=None, width=1080, height=1920):
+def get_or_create_draft(draft_id=None, width=1920, height=1080):
     """
     Get or create CapCut draft
     :param draft_id: Draft ID, if None or corresponding zip file not found, create new draft

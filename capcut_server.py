@@ -43,8 +43,8 @@ def add_video():
     video_url = data.get('video_url')
     start = data.get('start', 0)
     end = data.get('end', 0)
-    width = data.get('width', 1080)
-    height = data.get('height', 1920)
+    width = data.get('width', 1920)
+    height = data.get('height', 1080)
     draft_id = data.get('draft_id')
     transform_y = data.get('transform_y', 0)
     scale_x = data.get('scale_x', 1)
@@ -412,11 +412,8 @@ def add_text():
         return jsonify(result)
 
     except Exception as e:
-        if is_chinese:
-            error_message = f"Error occurred while processing text: {str(e)}. You can click the link below for help: "
-        else:
-            error_message = f"Error occurred while processing text: {str(e)}. You can click the link below for help: "
-        result["error"] = error_message + purchase_link
+        error_message = f"Error occurred while processing text: {str(e)}. You can click the link below for help: "
+        result["error"] = error_message
         return jsonify(result)
 
 @app.route('/add_image', methods=['POST'])
