@@ -142,8 +142,8 @@ def add_audio():
     # Get audio effect parameters separately
     effect_type = data.get('effect_type', None)  # Audio effect type name
     effect_params = data.get('effect_params', None)  # Audio effect parameter list
-    width = data.get('width', 1080)
-    height = data.get('height', 1920)
+    width = data.get('width', 1920)
+    height = data.get('height', 1080)
     
     # # If there are audio effect parameters, combine them into sound_effects format
     sound_effects = None
@@ -261,8 +261,8 @@ def add_subtitle():
     scale_y = data.get('scale_y', 1.0)  # Default 1.0
     rotation = data.get('rotation', 0.0)  # Default 0.0
     track_name = data.get('track_name', 'subtitle')  # Default track name is 'subtitle'
-    width = data.get('width', 1080)
-    height = data.get('height', 1920)
+    width = data.get('width', 1920)
+    height = data.get('height', 1080)
 
     result = {
         "success": False,
@@ -337,8 +337,8 @@ def add_text():
     outro_animation = data.get('outro_animation', None)
     outro_duration = data.get('outro_duration', 0.5)
     track_name = data.get('track_name', 'text_main')
-    width = data.get('width', 1080)
-    height = data.get('height', 1920)
+    width = data.get('width', 1920)
+    height = data.get('height', 1080)
     
     # New fixed width and height parameters 
     fixed_width = data.get('fixed_width', -1)
@@ -430,8 +430,8 @@ def add_image():
     # Get required parameters
     draft_folder = data.get('draft_folder')
     image_url = data.get('image_url')
-    width = data.get('width', 1080)
-    height = data.get('height', 1920)
+    width = data.get('width', 1920)
+    height = data.get('height', 1080)
     start = data.get('start', 0)
     end = data.get('end', 3.0)  # Default display 3 seconds
     draft_id = data.get('draft_id')
@@ -578,8 +578,8 @@ def add_effect():
     draft_id = data.get('draft_id')  # Draft ID, if None or corresponding zip file not found, create new draft
     track_name = data.get('track_name', "effect_01")  # Track name, can be omitted when there is only one effect track
     params = data.get('params')  # Effect parameter list, items not provided or None in parameter list use default values
-    width = data.get('width', 1080)
-    height = data.get('height', 1920)
+    width = data.get('width', 1920)
+    height = data.get('height', 1080)
 
     result = {
         "success": False,
@@ -777,8 +777,8 @@ def add_sticker():
     scale_y = data.get('scale_y', 1.0)
     track_name = data.get('track_name', 'sticker_main')
     relative_index = data.get('relative_index', 0)
-    width = data.get('width', 1080)
-    height = data.get('height', 1920)
+    width = data.get('width', 1920)
+    height = data.get('height', 1080)
 
     result = {
         "success": False,
