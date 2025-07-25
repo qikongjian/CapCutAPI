@@ -1360,6 +1360,96 @@ def get_video_character_effect_types():
         result["error"] = f"Error occurred while getting character effect types: {str(e)}"
         return jsonify(result)
 
+@app.route('/query_draft', methods=['POST'])
+def query_draft():
+    """查询草稿信息"""
+    data = request.get_json()
+    
+    # Get required parameters
+    draft_id = data.get('draft_id')
+    
+    # Validate required parameters
+    if not draft_id:
+        error_message = "Hi, the required parameter 'draft_id' is missing. Please add it and try again."
+        return jsonify({
+            "success": False,
+            "error": error_message
+        })
+    
+    try:
+        from draft_cache import DRAFT_CACHE
+        import json
+        
+        # Check if draft exists in cache
+        if draft_id in DRAFT_CACHE:
+            script = DRAFT_CACHE[draft_id]
+            
+            # Convert script object to dictionary and return directly
+            script_dict = json.loads(script.dumps())
+            
+            return jsonify({
+                "success": True,
+                "draft_id": draft_id,
+                "data": script_dict
+            })
+        else:
+            error_message = f"Draft {draft_id} not found in cache."
+            return jsonify({
+                "success": False,
+                "error": error_message
+            })
+            
+    except Exception as e:
+        error_message = f"Error occurred while querying draft: {str(e)}."
+        return jsonify({
+            "success": False,
+            "error": error_message
+        })
+
+@app.route('/delete_draft', methods=['POST'])
+def delete_draft():
+    """删除草稿"""
+    data = request.get_json()
+    
+    # Get required parameters
+    draft_id = data.get('draft_id')
+    
+    result = {
+        "success": False,
+        "output": "",
+        "error": ""
+    }
+    
+    # Validate required parameters
+    if not draft_id:
+        error_message = "Hi, the required parameter 'draft_id' is missing. Please add it and try again."
+        result["error"] = error_message
+        return jsonify(result)
+    
+    try:
+        from draft_cache import DRAFT_CACHE
+        
+        # Check if draft exists in cache
+        if draft_id in DRAFT_CACHE:
+            # Delete from cache
+            del DRAFT_CACHE[draft_id]
+            
+            result["success"] = True
+            result["output"] = {
+                "draft_id": draft_id,
+                "message": "Draft deleted successfully from cache"
+            }
+            return jsonify(result)
+        else:
+            error_message = f"Draft {draft_id} not found in cache."
+            result["error"] = error_message
+            return jsonify(result)
+        
+    except Exception as e:
+        error_message = f"Error occurred while deleting draft: {str(e)}."
+        result["error"] = error_message
+        return jsonify(result)
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=PORT)
