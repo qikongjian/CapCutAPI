@@ -30,6 +30,7 @@ from add_effect_impl import add_effect_impl
 from add_sticker_impl import add_sticker_impl
 from create_draft import create_draft
 from util import generate_draft_url as utilgenerate_draft_url
+from pyJianYingDraft.jianying_controller import Jianying_controller, Export_resolution, Export_framerate
 
 from settings.local import IS_CAPCUT_ENV, DRAFT_DOMAIN, PREVIEW_ROUTER, PORT
 
@@ -1447,6 +1448,160 @@ def delete_draft():
         
     except Exception as e:
         error_message = f"Error occurred while deleting draft: {str(e)}."
+        result["error"] = error_message
+        return jsonify(result)
+
+
+# 全局剪映控制器实例
+jianying_controller = None
+
+def get_jianying_controller():
+    """获取剪映控制器实例"""
+    global jianying_controller
+    if jianying_controller is None:
+        try:
+            jianying_controller = Jianying_controller()
+        except Exception as e:
+            raise Exception(f"初始化剪映控制器失败: {str(e)}")
+    return jianying_controller
+
+@app.route('/export_draft', methods=['POST'])
+def export_draft():
+    """导出剪映草稿"""
+    data = request.get_json()
+    
+    # 获取必需参数
+    draft_name = data.get('draft_name')
+    output_path = data.get('output_path')
+    resolution = data.get('resolution')
+    framerate = data.get('framerate')
+    timeout = data.get('timeout', 12000)
+    
+    result = {
+        "success": False,
+        "output": "",
+        "error": ""
+    }
+    
+    # 验证必需参数
+    if not draft_name:
+        error_message = "缺少必需参数 'draft_name'"
+        result["error"] = error_message
+        return jsonify(result)
+    
+    try:
+        # 获取剪映控制器实例
+        controller = get_jianying_controller()
+        
+        # 转换分辨率和帧率参数
+        resolution_enum = None
+        if resolution:
+            try:
+                resolution_enum = Export_resolution(resolution)
+            except ValueError:
+                error_message = f"不支持的分辨率: {resolution}"
+                result["error"] = error_message
+                return jsonify(result)
+        
+        framerate_enum = None
+        if framerate:
+            try:
+                framerate_enum = Export_framerate(framerate)
+            except ValueError:
+                error_message = f"不支持的帧率: {framerate}"
+                result["error"] = error_message
+                return jsonify(result)
+        
+        # 开始导出
+        controller.export_draft(
+            draft_name=draft_name,
+            output_path=output_path,
+            resolution=resolution_enum,
+            framerate=framerate_enum,
+            timeout=timeout
+        )
+        
+        result["success"] = True
+        result["output"] = {
+            "draft_name": draft_name,
+            "output_path": output_path,
+            "message": "导出任务已启动"
+        }
+        return jsonify(result)
+        
+    except Exception as e:
+        error_message = f"导出草稿时出错: {str(e)}"
+        result["error"] = error_message
+        return jsonify(result)
+
+@app.route('/get_export_progress', methods=['GET'])
+def get_export_progress():
+    """获取导出进度"""
+    result = {
+        "success": False,
+        "output": "",
+        "error": ""
+    }
+    
+    try:
+        # 获取剪映控制器实例
+        controller = get_jianying_controller()
+        
+        # 获取导出进度
+        progress = controller.get_export_progress()
+        
+        result["success"] = True
+        result["output"] = progress
+        return jsonify(result)
+        
+    except Exception as e:
+        error_message = f"获取导出进度时出错: {str(e)}"
+        result["error"] = error_message
+        return jsonify(result)
+
+@app.route('/get_export_resolutions', methods=['GET'])
+def get_export_resolutions():
+    """获取支持的导出分辨率列表"""
+    result = {
+        "success": False,
+        "output": "",
+        "error": ""
+    }
+    
+    try:
+        resolutions = [resolution.value for resolution in Export_resolution]
+        
+        result["success"] = True
+        result["output"] = {
+            "resolutions": resolutions
+        }
+        return jsonify(result)
+        
+    except Exception as e:
+        error_message = f"获取导出分辨率列表时出错: {str(e)}"
+        result["error"] = error_message
+        return jsonify(result)
+
+@app.route('/get_export_framerates', methods=['GET'])
+def get_export_framerates():
+    """获取支持的导出帧率列表"""
+    result = {
+        "success": False,
+        "output": "",
+        "error": ""
+    }
+    
+    try:
+        framerates = [framerate.value for framerate in Export_framerate]
+        
+        result["success"] = True
+        result["output"] = {
+            "framerates": framerates
+        }
+        return jsonify(result)
+        
+    except Exception as e:
+        error_message = f"获取导出帧率列表时出错: {str(e)}"
         result["error"] = error_message
         return jsonify(result)
 

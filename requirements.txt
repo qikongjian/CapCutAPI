@@ -3,3 +3,4 @@ psutil
 flask
 requests
 oss2
+uiautomation
