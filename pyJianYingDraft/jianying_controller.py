@@ -94,6 +94,13 @@ class Jianying_controller:
     def __init__(self):
         """初始化剪映控制器, 此时剪映应该处于目录页"""
         logger.info("Initializing Jianying_controller...")
+        
+        # 确保 uiautomation 在当前线程中正确初始化
+        try:
+            uia.UIAutomationInitializerInThread()
+        except Exception as e:
+            logger.warning(f"UIAutomation initialization warning: {e}")
+        
         self.get_window()
         self.export_progress = {"status": "idle", "percent": 0.0, "message": "", "start_time": 0}
         logger.info("Jianying_controller initialized successfully.")

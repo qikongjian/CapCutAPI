@@ -1452,18 +1452,25 @@ def delete_draft():
         return jsonify(result)
 
 
-# 全局剪映控制器实例
-jianying_controller = None
+# 线程本地存储剪映控制器实例
+import threading
+thread_local = threading.local()
 
 def get_jianying_controller():
-    """获取剪映控制器实例"""
-    global jianying_controller
-    if jianying_controller is None:
+    """获取剪映控制器实例（线程安全）"""
+    # 检查当前线程是否已有控制器实例
+    if not hasattr(thread_local, 'jianying_controller'):
         try:
-            jianying_controller = Jianying_controller()
+            # 初始化 uiautomation
+            import uiautomation as uia
+            uia.UIAutomationInitializerInThread()
+            
+            # 创建新的控制器实例
+            thread_local.jianying_controller = Jianying_controller()
         except Exception as e:
             raise Exception(f"初始化剪映控制器失败: {str(e)}")
-    return jianying_controller
+    
+    return thread_local.jianying_controller
 
 @app.route('/export_draft', methods=['POST'])
 def export_draft():
