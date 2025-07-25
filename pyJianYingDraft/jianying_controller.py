@@ -97,9 +97,11 @@ class Jianying_controller:
         
         # 确保 uiautomation 在当前线程中正确初始化
         try:
-            uia.UIAutomationInitializerInThread()
+            self.ui_initializer = uia.UIAutomationInitializerInThread()
+            logger.info("UIAutomation initialized successfully in thread")
         except Exception as e:
             logger.warning(f"UIAutomation initialization warning: {e}")
+            self.ui_initializer = None
         
         self.get_window()
         self.export_progress = {"status": "idle", "percent": 0.0, "message": "", "start_time": 0}

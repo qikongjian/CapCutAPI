@@ -1461,9 +1461,9 @@ def get_jianying_controller():
     # 检查当前线程是否已有控制器实例
     if not hasattr(thread_local, 'jianying_controller'):
         try:
-            # 初始化 uiautomation
+            # 初始化 uiautomation（创建对象而不是调用函数）
             import uiautomation as uia
-            uia.UIAutomationInitializerInThread()
+            thread_local.ui_initializer = uia.UIAutomationInitializerInThread()
             
             # 创建新的控制器实例
             thread_local.jianying_controller = Jianying_controller()
