@@ -1566,52 +1566,5 @@ def get_export_progress():
         result["error"] = error_message
         return jsonify(result)
 
-@app.route('/get_export_resolutions', methods=['GET'])
-def get_export_resolutions():
-    """获取支持的导出分辨率列表"""
-    result = {
-        "success": False,
-        "output": "",
-        "error": ""
-    }
-    
-    try:
-        resolutions = [resolution.value for resolution in Export_resolution]
-        
-        result["success"] = True
-        result["output"] = {
-            "resolutions": resolutions
-        }
-        return jsonify(result)
-        
-    except Exception as e:
-        error_message = f"获取导出分辨率列表时出错: {str(e)}"
-        result["error"] = error_message
-        return jsonify(result)
-
-@app.route('/get_export_framerates', methods=['GET'])
-def get_export_framerates():
-    """获取支持的导出帧率列表"""
-    result = {
-        "success": False,
-        "output": "",
-        "error": ""
-    }
-    
-    try:
-        framerates = [framerate.value for framerate in Export_framerate]
-        
-        result["success"] = True
-        result["output"] = {
-            "framerates": framerates
-        }
-        return jsonify(result)
-        
-    except Exception as e:
-        error_message = f"获取导出帧率列表时出错: {str(e)}"
-        result["error"] = error_message
-        return jsonify(result)
-
-
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=PORT)
