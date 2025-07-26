@@ -34,6 +34,7 @@ from pyJianYingDraft.jianying_controller import Jianying_controller, Export_reso
 
 from settings.local import IS_CAPCUT_ENV, DRAFT_DOMAIN, PREVIEW_ROUTER, PORT
 
+from draft_cache import DRAFT_CACHE
 app = Flask(__name__)
  
 @app.route('/add_video', methods=['POST'])
@@ -1378,9 +1379,6 @@ def query_draft():
         })
     
     try:
-        from draft_cache import DRAFT_CACHE
-        import json
-        
         # Check if draft exists in cache
         if draft_id in DRAFT_CACHE:
             script = DRAFT_CACHE[draft_id]
