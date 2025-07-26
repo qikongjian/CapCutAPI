@@ -6,10 +6,12 @@ from process_controller import ProcessController
 import uiautomation as uia
 import re
 import os
+import sys
 from logging.handlers import RotatingFileHandler
 import logging # 引入 logging 模块
 
 from enum import Enum
+from tools.file_tools import upload_to_qiniu
 from typing import Optional, Literal, Callable
 
 from . import exceptions
@@ -38,6 +40,9 @@ file_handler = RotatingFileHandler(log_file_path, backupCount=5, encoding='utf-8
 file_handler.setLevel(logging.INFO)
 file_handler.setFormatter(formatter)
 logger.addHandler(file_handler)
+
+# 导入上传工具
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 logger.info("Flask 应用日志系统初始化完成。")
 
@@ -88,8 +93,8 @@ class Jianying_controller:
     app: uia.WindowControl
     """剪映窗口"""
     app_status: Literal["home", "edit", "pre_export"]
-    export_progress: dict = {"status": "idle", "percent": 0.0, "message": "", "start_time": 0}
-    """导出进度信息"""
+    export_progress_dict: dict = {}
+    """按draft_name存储的导出进度信息字典"""
 
     def __init__(self):
         """初始化剪映控制器, 此时剪映应该处于目录页"""
@@ -104,11 +109,14 @@ class Jianying_controller:
             self.ui_initializer = None
         
         self.get_window()
-        self.export_progress = {"status": "idle", "percent": 0.0, "message": "", "start_time": 0}
+        self.export_progress_dict = {}
         logger.info("Jianying_controller initialized successfully.")
 
-    def get_export_progress(self) -> dict:
-        """获取当前导出进度
+    def get_export_progress(self, draft_name: Optional[str] = None) -> dict:
+        """获取导出进度
+        
+        Args:
+            draft_name: 草稿名称，如果为None则返回最新的导出进度
         
         Returns:
             dict: 包含以下字段的字典
@@ -117,12 +125,68 @@ class Jianying_controller:
                 - message: 进度消息
                 - start_time: 开始导出的时间戳
                 - elapsed: 已经过的时间(秒)
+                - video_url: 上传后的视频地址(导出完成时)
         """
-        if self.export_progress["status"] != "idle":
-            self.export_progress["elapsed"] = time.time() - self.export_progress["start_time"]
-        return self.export_progress
+        if draft_name is None:
+            # 如果没有指定draft_name，返回最新的进度
+            if not self.export_progress_dict:
+                return {"status": "idle", "percent": 0.0, "message": "", "start_time": 0, "elapsed": 0}
+            # 找到最新的进度（开始时间最晚的）
+            latest_draft_name = max(self.export_progress_dict.keys(), 
+                                key=lambda k: self.export_progress_dict[k].get("start_time", 0))
+            progress = self.export_progress_dict[latest_draft_name]
+        else:
+            # 返回指定draft_name的进度
+            if draft_name not in self.export_progress_dict:
+                return {"status": "idle", "percent": 0.0, "message": "", "start_time": 0, "elapsed": 0}
+            progress = self.export_progress_dict[draft_name]
+        
+        # 更新elapsed时间
+        if progress["status"] not in ["idle", "finished", "error"]:
+            progress["elapsed"] = time.time() - progress["start_time"]
+        
+        return progress
 
-    def export_draft(self, draft_name: str, output_path: Optional[str] = None, *,
+    def _upload_and_cleanup(self, draft_name: str, export_path: str):
+        """上传视频到七牛云并清理本地文件"""
+        try:
+            # 读取视频文件
+            with open(export_path, 'rb') as f:
+                video_data = f.read()
+            
+            # 获取文件扩展名
+            file_extension = os.path.splitext(export_path)[1][1:]  # 移除点号
+            
+            # 上传到七牛云
+            video_url = upload_to_qiniu(video_data, file_extension)
+            
+            if video_url:
+                # 更新进度信息
+                self.export_progress_dict[draft_name]["video_url"] = video_url
+                self.export_progress_dict[draft_name]["message"] = "上传完成"
+                logger.info(f"视频上传成功: {video_url}")
+                
+                # 删除本地视频文件
+                try:
+                    os.remove(export_path)
+                    logger.info(f"删除本地视频文件: {export_path}")
+                except Exception as e:
+                    logger.warning(f"删除本地视频文件失败: {e}")
+                
+                return video_url
+            else:
+                self.export_progress_dict[draft_name]["status"] = "error"
+                self.export_progress_dict[draft_name]["message"] = "上传到七牛云失败"
+                logger.error("上传到七牛云失败")
+                return None
+                
+        except Exception as e:
+            self.export_progress_dict[draft_name]["status"] = "error"
+            self.export_progress_dict[draft_name]["message"] = f"上传处理失败: {str(e)}"
+            logger.error(f"上传处理失败: {e}")
+            return None
+
+    def export_draft(self, draft_name: str, *,
                      resolution: Optional[Export_resolution] = None,
                      framerate: Optional[Export_framerate] = None,
                      timeout: float = 1200) -> None:
@@ -132,7 +196,6 @@ class Jianying_controller:
 
         Args:
             draft_name (`str`): 要导出的剪映草稿名称
-            output_path (`str`, optional): 导出路径, 支持指向文件夹或直接指向文件, 不指定则使用剪映默认路径.
             resolution (`Export_resolution`, optional): 导出分辨率, 默认不改变剪映导出窗口中的设置.
             framerate (`Export_framerate`, optional): 导出帧率, 默认不改变剪映导出窗口中的设置.
             timeout (`float`, optional): 导出超时时间(秒), 默认为20分钟.
@@ -141,22 +204,33 @@ class Jianying_controller:
             `DraftNotFound`: 未找到指定名称的剪映草稿
             `AutomationError`: 剪映操作失败
         """
-        logger.info(f"Starting export for draft: '{draft_name}' to '{output_path or 'default path'}' with resolution: {resolution}, framerate: {framerate}")
-        self.export_progress["status"] = "exporting"
-        self.export_progress["percent"] = 0.0
-        self.export_progress["message"] = "开始导出"
-        self.export_progress["start_time"] = time.time()
-        self.export_progress["elapsed"] = 0
+        logger.info(f"Starting export for draft: '{draft_name}' with resolution: {resolution}, framerate: {framerate}")
+        
+        # 创建输出目录
+        project_root = os.path.dirname(os.path.dirname(__file__))
+        downloads_dir = os.path.join(project_root, "downloads")
+        if not os.path.exists(downloads_dir):
+            os.makedirs(downloads_dir)
+        
+        # 初始化该draft_name的进度信息
+        self.export_progress_dict[draft_name] = {
+            "status": "exporting", 
+            "percent": 0.0, 
+            "message": "开始导出", 
+            "start_time": time.time(), 
+            "elapsed": 0,
+            "video_url": ""
+        }
 
         logger.info("Attempting to switch to home page.")
         self.get_window()
         self.switch_to_home()
         logger.info("Successfully switched to home page.")
 
-        self.export_progress["status"] = "exporting"
-        self.export_progress["percent"] = 5.0
-        self.export_progress["message"] = "正在导出"
-        self.export_progress["elapsed"] = time.time() - self.export_progress["start_time"]
+        self.export_progress_dict[draft_name]["status"] = "exporting"
+        self.export_progress_dict[draft_name]["percent"] = 5.0
+        self.export_progress_dict[draft_name]["message"] = "正在导出"
+        self.export_progress_dict[draft_name]["elapsed"] = time.time() - self.export_progress_dict[draft_name]["start_time"]
 
         logger.info(f"Clicking draft: '{draft_name}'")
         # 点击对应草稿
@@ -167,28 +241,28 @@ class Jianying_controller:
         if not draft_name_text.Exists(0):
             error_msg = f"DraftNotFound: No Jianying draft named '{draft_name}' found."
             logger.error(error_msg)
-            self.export_progress["status"] = "error"
-            self.export_progress["percent"] = 100.0
-            self.export_progress["message"] = f"未找到名为{draft_name}的剪映草稿"
-            self.export_progress["elapsed"] = time.time() - self.export_progress["start_time"]
+            self.export_progress_dict[draft_name]["status"] = "error"
+            self.export_progress_dict[draft_name]["percent"] = 100.0
+            self.export_progress_dict[draft_name]["message"] = f"未找到名为{draft_name}的剪映草稿"
+            self.export_progress_dict[draft_name]["elapsed"] = time.time() - self.export_progress_dict[draft_name]["start_time"]
             raise exceptions.DraftNotFound(f"未找到名为{draft_name}的剪映草稿")
         draft_btn = draft_name_text.GetParentControl()
         if draft_btn is None:
             error_msg = f"AutomationError: Could not find parent control for draft title '{draft_name}'."
             logger.error(error_msg)
-            self.export_progress["status"] = "error"
-            self.export_progress["percent"] = 100.0
-            self.export_progress["message"] = f"自动化操作失败，无法点击草稿'{draft_name}'"
-            self.export_progress["elapsed"] = time.time() - self.export_progress["start_time"]
+            self.export_progress_dict[draft_name]["status"] = "error"
+            self.export_progress_dict[draft_name]["percent"] = 100.0
+            self.export_progress_dict[draft_name]["message"] = f"自动化操作失败，无法点击草稿'{draft_name}'"
+            self.export_progress_dict[draft_name]["elapsed"] = time.time() - self.export_progress_dict[draft_name]["start_time"]
             raise AutomationError(error_msg)
         
         draft_btn.Click(simulateMove=False)
         logger.info(f"Clicked on draft: '{draft_name}'.")
 
-        self.export_progress["status"] = "exporting"
-        self.export_progress["percent"] = 10.0
-        self.export_progress["message"] = "正在导出"
-        self.export_progress["elapsed"] = time.time() - self.export_progress["start_time"]
+        self.export_progress_dict[draft_name]["status"] = "exporting"
+        self.export_progress_dict[draft_name]["percent"] = 10.0
+        self.export_progress_dict[draft_name]["message"] = "正在导出"
+        self.export_progress_dict[draft_name]["elapsed"] = time.time() - self.export_progress_dict[draft_name]["start_time"]
         
         logger.info(f"Waiting for edit window for draft: '{draft_name}' (timeout: 180s)")
         # 等待编辑窗口加载，最多等待180秒
@@ -221,15 +295,15 @@ class Jianying_controller:
         else:
             error_msg = f"AutomationError: Waiting for edit window timed out (180 seconds) for draft '{draft_name}'."
             logger.error(error_msg)
-            self.export_progress["status"] = "error"
-            self.export_progress["percent"] = 100.0
-            self.export_progress["message"] = "编辑超时（180秒）"
-            self.export_progress["elapsed"] = time.time() - self.export_progress["start_time"]
+            self.export_progress_dict[draft_name]["status"] = "error"
+            self.export_progress_dict[draft_name]["percent"] = 100.0
+            self.export_progress_dict[draft_name]["message"] = "编辑超时（180秒）"
+            self.export_progress_dict[draft_name]["elapsed"] = time.time() - self.export_progress_dict[draft_name]["start_time"]
             raise AutomationError("等待进入编辑窗口超时（180秒）")
-        self.export_progress["status"] = "exporting"
-        self.export_progress["percent"] = 15.0
-        self.export_progress["message"] = "正在导出"
-        self.export_progress["elapsed"] = time.time() - self.export_progress["start_time"]
+        self.export_progress_dict[draft_name]["status"] = "exporting"
+        self.export_progress_dict[draft_name]["percent"] = 15.0
+        self.export_progress_dict[draft_name]["message"] = "正在导出"
+        self.export_progress_dict[draft_name]["elapsed"] = time.time() - self.export_progress_dict[draft_name]["start_time"]
         
         # 点击导出按钮
         export_btn.Click(simulateMove=False)
@@ -250,15 +324,15 @@ class Jianying_controller:
                 break
             time.sleep(1)
         else:
-            self.export_progress["status"] = "error"
-            self.export_progress["percent"] = 100.0
-            self.export_progress["message"] = "导出超时（180秒）"
-            self.export_progress["elapsed"] = time.time() - self.export_progress["start_time"]
+            self.export_progress_dict[draft_name]["status"] = "error"
+            self.export_progress_dict[draft_name]["percent"] = 100.0
+            self.export_progress_dict[draft_name]["message"] = "导出超时（180秒）"
+            self.export_progress_dict[draft_name]["elapsed"] = time.time() - self.export_progress_dict[draft_name]["start_time"]
             raise AutomationError("等待进入导出窗口超时（180秒）")
-        self.export_progress["status"] = "exporting"
-        self.export_progress["percent"] = 20.0
-        self.export_progress["message"] = "正在导出"
-        self.export_progress["elapsed"] = time.time() - self.export_progress["start_time"]
+        self.export_progress_dict[draft_name]["status"] = "exporting"
+        self.export_progress_dict[draft_name]["percent"] = 20.0
+        self.export_progress_dict[draft_name]["message"] = "正在导出"
+        self.export_progress_dict[draft_name]["elapsed"] = time.time() - self.export_progress_dict[draft_name]["start_time"]
         
         # 获取原始导出路径（带后缀名）
         export_path_text = export_path_sib.GetSiblingControl(lambda ctrl: True)
@@ -341,10 +415,10 @@ class Jianying_controller:
             # 查找导出成功按钮
             succeed_close_btn = self.app.TextControl(searchDepth=2, Compare=ControlFinder.desc_matcher("ExportSucceedCloseBtn"))
             if succeed_close_btn.Exists(0):
-                self.export_progress["status"] = "finished"
-                self.export_progress["percent"] = 100
-                self.export_progress["message"] = "导出完成"
-                self.export_progress["elapsed"] = time.time() - self.export_progress["start_time"]
+                self.export_progress_dict[draft_name]["status"] = "finished"
+                self.export_progress_dict[draft_name]["percent"] = 100
+                self.export_progress_dict[draft_name]["message"] = "导出完成，正在上传"
+                self.export_progress_dict[draft_name]["elapsed"] = time.time() - self.export_progress_dict[draft_name]["start_time"]
                 succeed_close_btn.Click(simulateMove=False)
                 break
 
@@ -371,28 +445,42 @@ class Jianying_controller:
                         if percent_match:
                             percent = float(percent_match.group(1))  # 使用float而不是int
                             print("percent is ", percent)
-                            self.export_progress["percent"] = percent * 0.8 + 20
-                            self.export_progress["message"] = "正在导出"
-                            self.export_progress["elapsed"] = time.time() - self.export_progress["start_time"]
+                            self.export_progress_dict[draft_name]["percent"] = percent * 0.8 + 20
+                            self.export_progress_dict[draft_name]["message"] = "正在导出"
+                            self.export_progress_dict[draft_name]["elapsed"] = time.time() - self.export_progress_dict[draft_name]["start_time"]
                         break
             except Exception as e:
-                self.export_progress["message"] = f"获取进度时出错: {e}"
-                self.export_progress["elapsed"] = time.time() - self.export_progress["start_time"]
+                self.export_progress_dict[draft_name]["message"] = f"获取进度时出错: {e}"
+                self.export_progress_dict[draft_name]["elapsed"] = time.time() - self.export_progress_dict[draft_name]["start_time"]
 
             if time.time() - st > timeout:
-                self.export_progress["status"] = "error"
-                self.export_progress["message"] = f"导出超时{timeout}秒"
-                self.export_progress["elapsed"] = time.time() - self.export_progress["start_time"]
+                self.export_progress_dict[draft_name]["status"] = "error"
+                self.export_progress_dict[draft_name]["message"] = f"导出超时{timeout}秒"
+                self.export_progress_dict[draft_name]["elapsed"] = time.time() - self.export_progress_dict[draft_name]["start_time"]
                 raise AutomationError("导出超时, 时限为%d秒" % timeout)
 
             time.sleep(1)
         time.sleep(2)
 
-        # 复制导出的文件到指定目录
-        if output_path is not None:
-            shutil.move(export_path, output_path)
+        # 生成最终输出路径（使用时间戳避免冲突）
+        timestamp = int(time.time())
+        safe_draft_name = "".join(c for c in draft_name if c.isalnum() or c in (' ', '-', '_')).rstrip()
+        filename = f"{safe_draft_name}_{timestamp}.mp4"
+        final_export_path = os.path.join(downloads_dir, filename)
+        
+        # 移动导出的文件到downloads目录
+        shutil.move(export_path, final_export_path)
+        logger.info(f"导出 {draft_name} 至 {final_export_path} 完成")
 
-        logger.info(f"导出 {draft_name} 至 {output_path} 完成")
+        # 上传到七牛云并清理文件
+        video_url = self._upload_and_cleanup(draft_name, final_export_path)
+        
+        if video_url:
+            self.export_progress_dict[draft_name]["status"] = "finished"
+            self.export_progress_dict[draft_name]["message"] = "导出和上传完成"
+        else:
+            self.export_progress_dict[draft_name]["status"] = "error"
+            self.export_progress_dict[draft_name]["message"] = "导出完成但上传失败"
 
         # 回到目录页
         logger.info("back to home page")

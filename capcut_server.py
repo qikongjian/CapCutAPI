@@ -1479,7 +1479,6 @@ def export_draft():
     
     # 获取必需参数
     draft_name = data.get('draft_name')
-    output_path = data.get('output_path')
     resolution = data.get('resolution')
     framerate = data.get('framerate')
     timeout = data.get('timeout', 12000)
@@ -1522,7 +1521,6 @@ def export_draft():
         # 开始导出
         controller.export_draft(
             draft_name=draft_name,
-            output_path=output_path,
             resolution=resolution_enum,
             framerate=framerate_enum,
             timeout=timeout
@@ -1531,7 +1529,6 @@ def export_draft():
         result["success"] = True
         result["output"] = {
             "draft_name": draft_name,
-            "output_path": output_path,
             "message": "导出任务已启动"
         }
         return jsonify(result)
@@ -1541,9 +1538,17 @@ def export_draft():
         result["error"] = error_message
         return jsonify(result)
 
-@app.route('/get_export_progress', methods=['GET'])
+@app.route('/get_export_progress', methods=['GET', 'POST'])
 def get_export_progress():
     """获取导出进度"""
+    # 支持 GET 和 POST 两种方法
+    if request.method == 'POST':
+        data = request.get_json() or {}
+        draft_name = data.get('draft_name')
+    else:
+        # GET 方法从查询参数获取
+        draft_name = request.args.get('draft_name')
+    
     result = {
         "success": False,
         "output": "",
@@ -1555,7 +1560,7 @@ def get_export_progress():
         controller = get_jianying_controller()
         
         # 获取导出进度
-        progress = controller.get_export_progress()
+        progress = controller.get_export_progress(draft_name)
         
         result["success"] = True
         result["output"] = progress
