@@ -7,6 +7,13 @@ import random
 from concurrent.futures import ThreadPoolExecutor, Future
 from typing import Optional, Callable
 
+# 尝试加载.env文件
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 # 处理相对导入问题
 try:
     from .qiniu_uploader import QiniuUploader
