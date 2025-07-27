@@ -103,8 +103,6 @@ class Jianying_controller:
     app: uia.WindowControl
     """剪映窗口"""
     app_status: Literal["home", "edit", "pre_export"]
-    export_progress_dict: dict = {}
-    """按draft_name存储的导出进度信息字典"""
 
     def __init__(self):
         """初始化剪映控制器, 此时剪映应该处于目录页"""
@@ -119,14 +117,13 @@ class Jianying_controller:
             self.ui_initializer = None
         
         self.get_window()
-        self.export_progress_dict = {}
         logger.info("Jianying_controller initialized successfully.")
 
-    def get_export_progress(self, draft_name: Optional[str] = None) -> dict:
+    def get_export_progress(self, draft_name: str) -> dict:
         """获取导出进度（从缓存读取，不唤起剪映应用）
         
         Args:
-            draft_name: 草稿名称，如果为None则返回最新的导出进度
+            draft_name: 草稿名称，必须提供
         
         Returns:
             dict: 包含以下字段的字典
@@ -137,26 +134,34 @@ class Jianying_controller:
                 - elapsed: 已经过的时间(秒)
                 - video_url: 上传后的视频地址(导出完成时)
         """
-        if draft_name is None:
-            # 如果没有指定draft_name，返回最新的进度
-            return export_progress_cache.get_latest_progress()
-        else:
-            # 返回指定draft_name的进度
-            progress = export_progress_cache.get_progress(draft_name)
-            if progress is None:
-                return {"status": "idle", "percent": 0.0, "message": "", "start_time": 0, "elapsed": 0}
-            return progress
+        # 返回指定draft_name的进度
+        progress = export_progress_cache.get_progress(draft_name)
+        if progress is None:
+            return {"status": "idle", "percent": 0.0, "message": "", "start_time": 0, "elapsed": 0}
+        return progress
 
     def _update_progress(self, draft_name: str, **kwargs):
-        """更新导出进度并同步到缓存"""
-        if draft_name in self.export_progress_dict:
-            progress_data = self.export_progress_dict[draft_name]
-            progress_data.update(kwargs)
-            # 更新elapsed时间
-            if "elapsed" not in kwargs:
-                progress_data["elapsed"] = time.time() - progress_data["start_time"]
-            # 同步到缓存
-            export_progress_cache.set_progress(draft_name, progress_data)
+        """更新导出进度（直接使用Redis缓存）"""
+        # 从缓存获取当前进度，如果不存在则创建新的
+        progress_data = export_progress_cache.get_progress(draft_name)
+        if progress_data is None:
+            progress_data = {
+                "status": "idle", 
+                "percent": 0.0, 
+                "message": "", 
+                "start_time": time.time(), 
+                "elapsed": 0,
+                "video_url": ""
+            }
+        
+        # 更新进度数据
+        progress_data.update(kwargs)
+        # 更新elapsed时间
+        if "elapsed" not in kwargs:
+            progress_data["elapsed"] = time.time() - progress_data["start_time"]
+        
+        # 直接存储到缓存
+        export_progress_cache.set_progress(draft_name, progress_data)
 
     def _upload_with_retry(self, export_path: str, max_retries: int = 3) -> str:
         """带重试的上传方法"""
@@ -300,7 +305,7 @@ class Jianying_controller:
             except Exception as e:
                 logger.warning(f"删除已存在文件失败: {e}")
         
-        # 初始化该draft_name的进度信息
+        # 初始化该draft_name的进度信息（直接存储到Redis缓存）
         progress_data = {
             "status": "exporting", 
             "percent": 0.0, 
@@ -309,8 +314,6 @@ class Jianying_controller:
             "elapsed": 0,
             "video_url": ""
         }
-        self.export_progress_dict[draft_name] = progress_data
-        # 同时更新缓存
         export_progress_cache.set_progress(draft_name, progress_data)
 
         logger.info("Attempting to switch to home page.")

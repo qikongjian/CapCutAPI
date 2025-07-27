@@ -1681,15 +1681,17 @@ def get_export_progress():
         "error": ""
     }
     
+    # 验证必需参数
+    if not draft_name:
+        error_message = "缺少必需参数 'draft_name'"
+        result["error"] = error_message
+        return jsonify(result)
+    
     try:
-        if draft_name is None:
-            # 获取最新的导出进度
-            progress = export_progress_cache.get_latest_progress()
-        else:
-            # 获取指定草稿的进度
-            progress = export_progress_cache.get_progress(draft_name)
-            if progress is None:
-                progress = {"status": "idle", "percent": 0.0, "message": "", "start_time": 0, "elapsed": 0}
+        # 获取指定草稿的进度
+        progress = export_progress_cache.get_progress(draft_name)
+        if progress is None:
+            progress = {"status": "idle", "percent": 0.0, "message": "", "start_time": 0, "elapsed": 0}
         
         result["success"] = True
         result["output"] = progress

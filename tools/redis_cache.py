@@ -216,6 +216,103 @@ class RedisCache:
             logger.error(f"获取缓存信息失败: {str(e)}")
             return {"error": str(e), "redis_connected": False}
 
+    # 通用 Redis 操作方法
+    def set_string(self, key: str, value: str, ttl_seconds: int = None) -> bool:
+        """
+        存储字符串到 Redis
+        
+        Args:
+            key: 键名
+            value: 字符串值
+            ttl_seconds: 过期时间（秒），如果为None则使用默认TTL
+        
+        Returns:
+            bool: 操作是否成功
+        """
+        try:
+            if ttl_seconds is None:
+                ttl_seconds = self.ttl_seconds
+            
+            success = self.redis_client.setex(key, ttl_seconds, value)
+            if success:
+                logger.debug(f"成功存储字符串到Redis: {key}")
+                return True
+            else:
+                logger.error(f"存储字符串到Redis失败: {key}")
+                return False
+
+        except (ConnectionError, TimeoutError) as e:
+            logger.error(f"Redis连接问题，存储字符串失败 {key}: {str(e)}")
+            return False
+        except RedisError as e:
+            logger.error(f"Redis操作失败，存储字符串失败 {key}: {str(e)}")
+            return False
+        except Exception as e:
+            logger.error(f"存储字符串到Redis失败 {key}: {str(e)}")
+            return False
+
+    def get_string(self, key: str) -> Optional[str]:
+        """
+        从 Redis 获取字符串
+        
+        Args:
+            key: 键名
+        
+        Returns:
+            str or None: 字符串值，如果不存在或出错则返回None
+        """
+        try:
+            value = self.redis_client.get(key)
+            if value is None:
+                logger.debug(f"Redis中不存在键: {key}")
+                return None
+
+            # Redis returns bytes, decode to string
+            if isinstance(value, bytes):
+                value = value.decode('utf-8')
+            
+            logger.debug(f"成功从Redis获取字符串: {key}")
+            return value
+
+        except (ConnectionError, TimeoutError) as e:
+            logger.error(f"Redis连接问题，获取字符串失败 {key}: {str(e)}")
+            return None
+        except RedisError as e:
+            logger.error(f"Redis操作失败，获取字符串失败 {key}: {str(e)}")
+            return None
+        except Exception as e:
+            logger.error(f"从Redis获取字符串失败 {key}: {str(e)}")
+            return None
+
+    def delete_key(self, key: str) -> bool:
+        """
+        删除 Redis 键
+        
+        Args:
+            key: 键名
+        
+        Returns:
+            bool: 操作是否成功
+        """
+        try:
+            result = self.redis_client.delete(key)
+            success = result > 0
+            if success:
+                logger.debug(f"成功删除Redis键: {key}")
+            else:
+                logger.debug(f"Redis键不存在: {key}")
+            return success
+
+        except (ConnectionError, TimeoutError) as e:
+            logger.error(f"Redis连接问题，删除键失败 {key}: {str(e)}")
+            return False
+        except RedisError as e:
+            logger.error(f"Redis操作失败，删除键失败 {key}: {str(e)}")
+            return False
+        except Exception as e:
+            logger.error(f"删除Redis键失败 {key}: {str(e)}")
+            return False
+
 
 class RedisDict:
     """
