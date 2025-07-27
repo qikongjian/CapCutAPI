@@ -156,7 +156,7 @@ class Jianying_controller:
             export_progress_cache.set_progress(draft_name, progress_data)
 
     def _upload_and_cleanup(self, draft_name: str, export_path: str):
-        """上传视频到七牛云并清理本地文件和草稿文件夹"""
+        """上传视频到七牛云并清理本地文件"""
         try:
             # 读取视频文件
             with open(export_path, 'rb') as f:
@@ -185,21 +185,6 @@ class Jianying_controller:
                     logger.info(f"删除本地视频文件: {export_path}")
                 except Exception as e:
                     logger.warning(f"删除本地视频文件失败: {e}")
-                
-                # 删除草稿文件夹
-                try:
-                    if DRAFT_FOLDER and os.path.exists(DRAFT_FOLDER):
-                        draft_folder_path = os.path.join(DRAFT_FOLDER, draft_name)
-                        if os.path.exists(draft_folder_path):
-                            shutil.rmtree(draft_folder_path)
-                            logger.info(f"删除草稿文件夹: {draft_folder_path}")
-                        else:
-                            logger.warning(f"草稿文件夹不存在: {draft_folder_path}")
-                    else:
-                        logger.warning("DRAFT_FOLDER 配置为空或目录不存在")
-                except Exception as e:
-                    logger.warning(f"删除草稿文件夹失败: {e}")
-                
                 return video_url
             else:
                 progress_data = self.export_progress_dict[draft_name]
@@ -222,6 +207,22 @@ class Jianying_controller:
             
             logger.error(f"上传处理失败: {e}")
             return None
+
+    def _delete_draft_folder(self, draft_name: str):
+        """删除草稿目录下名为draft_name的具体草稿文件夹（需要在回到主页后调用）"""
+        try:
+            if DRAFT_FOLDER and os.path.exists(DRAFT_FOLDER):
+                # 构建具体草稿的路径：DRAFT_FOLDER/draft_name/
+                draft_project_path = os.path.join(DRAFT_FOLDER, draft_name)
+                if os.path.exists(draft_project_path):
+                    shutil.rmtree(draft_project_path)
+                    logger.info(f"成功删除草稿项目: {draft_project_path}")
+                else:
+                    logger.warning(f"草稿项目不存在: {draft_project_path}")
+            else:
+                logger.warning("DRAFT_FOLDER 配置为空或草稿根目录不存在")
+        except Exception as e:
+            logger.warning(f"删除草稿项目失败: {e}")
 
     def export_draft(self, draft_name: str, *,
                      resolution: Optional[Export_resolution] = None,
@@ -493,6 +494,12 @@ class Jianying_controller:
         try:
             self.get_window()
             self.switch_to_home()
+            
+            # 回到主页后，删除具体的草稿项目（此时剪映已释放文件占用）
+            if video_url:  # 只有上传成功才删除草稿项目
+                logger.info(f"删除草稿项目 '{draft_name}'（剪映已回到主页）")
+                self._delete_draft_folder(draft_name)
+                
         except Exception as e:
             logger.warning(f"back to home 失败: {str(e)}, 杀进程重启")
             ProcessController.kill_jianying()
@@ -503,6 +510,11 @@ class Jianying_controller:
             
             time.sleep(2)  # 等待进程启动
             ProcessController.kill_jianying_detector()
+            
+            # 即使重启了剪映，也尝试删除具体的草稿项目
+            if video_url:
+                logger.info(f"剪映重启后删除草稿项目 '{draft_name}'")
+                self._delete_draft_folder(draft_name)
 
 
     def switch_to_home(self) -> None:
