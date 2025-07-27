@@ -24,6 +24,9 @@ from export_progress_cache import export_progress_cache
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from settings.local import DRAFT_FOLDER
 
+# 导入线程模块
+import threading
+
 # --- 配置日志记录器 ---
 logger = logging.getLogger('flask_video_generator') # 为您的Flask应用定义一个特定的logger名称
 logger.setLevel(logging.INFO) # 设置最低记录级别
@@ -155,29 +158,59 @@ class Jianying_controller:
             # 同步到缓存
             export_progress_cache.set_progress(draft_name, progress_data)
 
-    def _upload_and_cleanup(self, draft_name: str, export_path: str):
-        """上传视频到七牛云并清理本地文件"""
+    def _upload_with_retry(self, export_path: str, max_retries: int = 3) -> str:
+        """带重试的上传方法"""
+        file_extension = os.path.splitext(export_path)[1][1:]  # 移除点号
+        
+        for attempt in range(max_retries):
+            try:
+                logger.info(f"尝试上传到七牛云 (第 {attempt + 1}/{max_retries} 次): {export_path}")
+                
+                # 读取视频文件
+                with open(export_path, 'rb') as f:
+                    video_data = f.read()
+                
+                # 上传到七牛云
+                video_url = upload_to_qiniu(video_data, file_extension)
+                
+                if video_url:
+                    logger.info(f"视频上传成功: {video_url}")
+                    return video_url
+                else:
+                    logger.warning(f"第 {attempt + 1} 次上传失败，返回空URL")
+                    
+            except Exception as e:
+                logger.warning(f"第 {attempt + 1} 次上传异常: {str(e)}")
+                
+            # 如果不是最后一次重试，等待一段时间再重试
+            if attempt < max_retries - 1:
+                wait_time = 5  # 固定等待5秒
+                logger.info(f"等待 {wait_time} 秒后重试...")
+                time.sleep(wait_time)
+        
+        logger.error(f"上传失败，已重试 {max_retries} 次")
+        return ""
+
+    def _background_upload_and_cleanup(self, draft_name: str, export_path: str):
+        """后台线程：上传视频到七牛云并清理文件"""
         try:
-            # 读取视频文件
-            with open(export_path, 'rb') as f:
-                video_data = f.read()
+            logger.info(f"开始后台上传任务: {draft_name}")
             
-            # 获取文件扩展名
-            file_extension = os.path.splitext(export_path)[1][1:]  # 移除点号
+            # 更新状态为上传中
+            self._update_progress(draft_name, status="uploading", message="正在上传到七牛云")
             
-            # 上传到七牛云
-            video_url = upload_to_qiniu(video_data, file_extension)
+            # 带重试的上传
+            video_url = self._upload_with_retry(export_path, max_retries=3)  # 重试3次快速上传
             
             if video_url:
-                # 更新进度信息
-                progress_data = self.export_progress_dict[draft_name]
-                progress_data["video_url"] = video_url
-                progress_data["message"] = "上传完成"
-                
-                # 更新缓存
-                export_progress_cache.set_progress(draft_name, progress_data)
-                
                 logger.info(f"视频上传成功: {video_url}")
+                
+                # 更新进度信息
+                self._update_progress(draft_name, 
+                                    status="finished", 
+                                    percent=100.0,
+                                    message="导出和上传完成", 
+                                    video_url=video_url)
                 
                 # 删除本地视频文件
                 try:
@@ -185,28 +218,35 @@ class Jianying_controller:
                     logger.info(f"删除本地视频文件: {export_path}")
                 except Exception as e:
                     logger.warning(f"删除本地视频文件失败: {e}")
-                return video_url
+                
+                # 删除草稿项目
+                try:
+                    self._delete_draft_folder(draft_name)
+                except Exception as e:
+                    logger.warning(f"删除草稿项目失败: {e}")
+                    
             else:
-                progress_data = self.export_progress_dict[draft_name]
-                progress_data["status"] = "error"
-                progress_data["message"] = "上传到七牛云失败"
-                
-                # 更新缓存
-                export_progress_cache.set_progress(draft_name, progress_data)
-                
-                logger.error("上传到七牛云失败")
-                return None
+                logger.error("上传到七牛云最终失败")
+                self._update_progress(draft_name, 
+                                    status="export_success_upload_failed", 
+                                    message=f"导出成功，但上传失败。视频已保存到: {export_path}")
                 
         except Exception as e:
-            progress_data = self.export_progress_dict[draft_name]
-            progress_data["status"] = "error"
-            progress_data["message"] = f"上传处理失败: {str(e)}"
-            
-            # 更新缓存
-            export_progress_cache.set_progress(draft_name, progress_data)
-            
-            logger.error(f"上传处理失败: {e}")
-            return None
+            logger.error(f"后台上传处理失败: {e}")
+            self._update_progress(draft_name, 
+                                status="export_success_upload_failed", 
+                                message=f"导出成功，但上传失败: {str(e)}。视频已保存到: {export_path}")
+
+    def _start_background_upload(self, draft_name: str, export_path: str):
+        """启动后台上传线程"""
+        upload_thread = threading.Thread(
+            target=self._background_upload_and_cleanup,
+            args=(draft_name, export_path),
+            name=f"upload_{draft_name}"
+        )
+        upload_thread.daemon = True  # 守护线程
+        upload_thread.start()
+        logger.info(f"已启动后台上传线程: {upload_thread.name}")
 
     def _delete_draft_folder(self, draft_name: str):
         """删除草稿目录下名为draft_name的具体草稿文件夹（需要在回到主页后调用）"""
@@ -481,24 +521,15 @@ class Jianying_controller:
         shutil.move(export_path, final_export_path)
         logger.info(f"导出 {draft_name} 至 {final_export_path} 完成")
 
-        # 上传到七牛云并清理文件
-        video_url = self._upload_and_cleanup(draft_name, final_export_path)
-        
-        if video_url:
-            self._update_progress(draft_name, status="finished", message="导出和上传完成")
-        else:
-            self._update_progress(draft_name, status="error", message="导出完成但上传失败")
+        # 更新导出完成状态
+        self._update_progress(draft_name, status="export_completed", percent=100.0, message="导出完成，准备上传")
 
         # 回到目录页
         logger.info("back to home page")
         try:
             self.get_window()
             self.switch_to_home()
-            
-            # 回到主页后，删除具体的草稿项目（此时剪映已释放文件占用）
-            if video_url:  # 只有上传成功才删除草稿项目
-                logger.info(f"删除草稿项目 '{draft_name}'（剪映已回到主页）")
-                self._delete_draft_folder(draft_name)
+            logger.info("成功回到主页")
                 
         except Exception as e:
             logger.warning(f"back to home 失败: {str(e)}, 杀进程重启")
@@ -510,11 +541,11 @@ class Jianying_controller:
             
             time.sleep(2)  # 等待进程启动
             ProcessController.kill_jianying_detector()
-            
-            # 即使重启了剪映，也尝试删除具体的草稿项目
-            if video_url:
-                logger.info(f"剪映重启后删除草稿项目 '{draft_name}'")
-                self._delete_draft_folder(draft_name)
+            logger.info("剪映已重启")
+
+        # 导出完成后，启动后台上传线程（与剪映导出过程解耦）
+        logger.info(f"剪映导出完成，启动后台上传任务: {draft_name}")
+        self._start_background_upload(draft_name, final_export_path)
 
 
     def switch_to_home(self) -> None:

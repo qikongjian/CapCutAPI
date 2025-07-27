@@ -36,7 +36,7 @@ class ExportProgressCache:
                 return None
             
             # 更新elapsed时间（如果任务还在进行中）
-            if progress_data["status"] not in ["idle", "finished", "error"]:
+            if progress_data["status"] not in ["idle", "finished", "error", "export_success_upload_failed"]:
                 progress_data["elapsed"] = time.time() - progress_data["start_time"]
             
             return progress_data.copy()
