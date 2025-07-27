@@ -1614,7 +1614,6 @@ def retry_upload():
         
         if video_url:
             # 上传成功，更新进度缓存
-            from export_progress_cache import export_progress_cache
             export_progress_cache.set_progress(draft_name, {
                 "status": "finished",
                 "percent": 100.0,
