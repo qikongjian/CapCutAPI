@@ -19,6 +19,9 @@ import random
 import uuid
 import json
 import codecs
+import platform
+import sys
+import os
 from add_audio_track import add_audio_track
 from add_video_track import add_video_track
 from add_text_impl import add_text_impl
@@ -30,7 +33,19 @@ from add_effect_impl import add_effect_impl
 from add_sticker_impl import add_sticker_impl
 from create_draft import create_draft
 from util import generate_draft_url as utilgenerate_draft_url
-from pyJianYingDraft.jianying_controller import Jianying_controller, Export_resolution, Export_framerate
+
+# 平台检测和条件性导入
+IS_WINDOWS = platform.system() == 'Windows'
+Jianying_controller = None
+Export_resolution = None
+Export_framerate = None
+
+if IS_WINDOWS:
+    try:
+        from pyJianYingDraft.jianying_controller import Jianying_controller, Export_resolution, Export_framerate
+    except ImportError as e:
+        print(f"Warning: Could not import Jianying_controller on Windows: {e}")
+        IS_WINDOWS = False
 
 from settings.local import IS_CAPCUT_ENV, DRAFT_DOMAIN, PREVIEW_ROUTER, PORT
 
@@ -1455,6 +1470,12 @@ thread_local = threading.local()
 
 def get_jianying_controller():
     """获取剪映控制器实例（线程安全）"""
+    if not IS_WINDOWS:
+        raise Exception("剪映控制器仅在 Windows 平台上可用")
+    
+    if Jianying_controller is None:
+        raise Exception("Jianying_controller 未能正确导入")
+    
     # 检查当前线程是否已有控制器实例
     if not hasattr(thread_local, 'jianying_controller'):
         try:
@@ -1485,6 +1506,12 @@ def export_draft():
         "output": "",
         "error": ""
     }
+    
+    # 平台检测
+    if not IS_WINDOWS:
+        error_message = "导出功能仅在 Windows 平台上可用。当前平台: " + platform.system()
+        result["error"] = error_message
+        return jsonify(result)
     
     # 验证必需参数
     if not draft_name:
