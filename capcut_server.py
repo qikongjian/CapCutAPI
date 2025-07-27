@@ -35,7 +35,7 @@ from add_effect_impl import add_effect_impl
 from add_sticker_impl import add_sticker_impl
 from create_draft import create_draft
 from util import generate_draft_url as utilgenerate_draft_url
-from tools.file_tools import upload_to_qiniu
+from tools.upload_manager import upload_to_qiniu
 # 直接从缓存读取进度，不唤起剪映应用
 from export_progress_cache import export_progress_cache
 from settings.local import DRAFT_FOLDER

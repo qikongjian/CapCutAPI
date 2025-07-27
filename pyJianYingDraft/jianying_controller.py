@@ -11,7 +11,7 @@ from logging.handlers import RotatingFileHandler
 import logging # 引入 logging 模块
 
 from enum import Enum
-from tools.file_tools import upload_to_qiniu
+from tools.upload_manager import upload_to_qiniu
 from typing import Optional, Literal, Callable
 
 from . import exceptions
