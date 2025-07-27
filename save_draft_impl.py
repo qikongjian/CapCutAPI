@@ -20,7 +20,7 @@ import time
 import requests # Import requests for making HTTP calls
 import logging
 # Import configuration
-from settings import IS_CAPCUT_ENV, IS_UPLOAD_DRAFT
+from settings.local import IS_CAPCUT_ENV, IS_UPLOAD_DRAFT, DRAFT_FOLDER
 
 # --- Get your Logger instance ---
 # The name here must match the logger name you configured in app.py
@@ -50,7 +50,7 @@ def build_asset_path(draft_folder: str, draft_id: str, asset_type: str, material
         draft_real_path = os.path.join(draft_folder, draft_id, "assets", asset_type, material_name)
     return draft_real_path
 
-def save_draft_background(draft_id, draft_folder, task_id):
+def save_draft_background(draft_id, task_id):
     """Background save draft to OSS"""
     try:
         # Get draft information from global cache
@@ -83,10 +83,10 @@ def save_draft_background(draft_id, draft_folder, task_id):
         logger.info(f"Task {task_id} status updated to 'processing': Preparing draft files.")
         
         # Determine the target directory for the draft
-        if draft_folder:
-            # Use user-specified draft folder
-            target_draft_dir = draft_folder
-            logger.info(f"Using user-specified draft folder: {target_draft_dir}")
+        if DRAFT_FOLDER and os.path.exists(DRAFT_FOLDER):
+            # Use configured draft folder
+            target_draft_dir = DRAFT_FOLDER
+            logger.info(f"Using configured draft folder: {target_draft_dir}")
         else:
             # Fall back to current directory
             target_draft_dir = current_dir
@@ -247,12 +247,12 @@ def save_draft_background(draft_id, draft_folder, task_id):
             logger.info(f"Draft archive has been uploaded to OSS, URL: {draft_url}")
             update_task_field(task_id, "draft_url", draft_url)
 
-            # Clean up temporary files (only if we're not using user's draft folder)
-            if not draft_folder and os.path.exists(os.path.join(current_dir, draft_id)):
+            # Clean up temporary files (only if we're not using configured draft folder)
+            if not DRAFT_FOLDER and os.path.exists(os.path.join(current_dir, draft_id)):
                 shutil.rmtree(os.path.join(current_dir, draft_id))
                 logger.info(f"Cleaned up temporary draft folder: {os.path.join(current_dir, draft_id)}")
-            elif draft_folder:
-                logger.info(f"Draft files saved to user-specified folder: {os.path.join(target_draft_dir, draft_id)}, not cleaning up.")
+            elif DRAFT_FOLDER:
+                logger.info(f"Draft files saved to configured folder: {os.path.join(target_draft_dir, draft_id)}, not cleaning up.")
 
     
         # Update task status - Completed
@@ -273,9 +273,9 @@ def save_draft_background(draft_id, draft_folder, task_id):
 def query_task_status(task_id: str):
     return get_task_status(task_id)
 
-def save_draft_impl(draft_id: str, draft_folder: str = None) -> Dict[str, str]:
+def save_draft_impl(draft_id: str) -> Dict[str, str]:
     """Start a background task to save the draft"""
-    logger.info(f"Received save draft request: draft_id={draft_id}, draft_folder={draft_folder}")
+    logger.info(f"Received save draft request: draft_id={draft_id}")
     try:
         # Generate a unique task ID
         task_id = draft_id
@@ -285,7 +285,7 @@ def save_draft_impl(draft_id: str, draft_folder: str = None) -> Dict[str, str]:
         # Changed to synchronous execution
         return {
             "success": True,
-            "draft_url": save_draft_background(draft_id, draft_folder, task_id)
+            "draft_url": save_draft_background(draft_id, task_id)
             }
 
         # # Start a background thread to execute the task

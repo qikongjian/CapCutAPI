@@ -664,7 +664,6 @@ def save_draft():
     
     # Get required parameters
     draft_id = data.get('draft_id')
-    draft_folder = data.get('draft_folder')  # Draft folder parameter
     
     result = {
         "success": False,
@@ -680,7 +679,7 @@ def save_draft():
     
     try:
         # Call save_draft_impl method, start background task
-        draft_result = save_draft_impl(draft_id, draft_folder)
+        draft_result = save_draft_impl(draft_id)
         
         result["success"] = True
         result["output"] = draft_result
@@ -1538,7 +1537,7 @@ def export_draft():
 
 @app.route('/get_export_progress', methods=['GET', 'POST'])
 def get_export_progress():
-    """获取导出进度"""
+    """获取导出进度（直接从缓存读取，不唤起剪映应用）"""
     # 支持 GET 和 POST 两种方法
     if request.method == 'POST':
         data = request.get_json() or {}
@@ -1554,11 +1553,17 @@ def get_export_progress():
     }
     
     try:
-        # 获取剪映控制器实例
-        controller = get_jianying_controller()
+        # 直接从缓存读取进度，不唤起剪映应用
+        from export_progress_cache import export_progress_cache
         
-        # 获取导出进度
-        progress = controller.get_export_progress(draft_name)
+        if draft_name is None:
+            # 获取最新的导出进度
+            progress = export_progress_cache.get_latest_progress()
+        else:
+            # 获取指定草稿的进度
+            progress = export_progress_cache.get_progress(draft_name)
+            if progress is None:
+                progress = {"status": "idle", "percent": 0.0, "message": "", "start_time": 0, "elapsed": 0}
         
         result["success"] = True
         result["output"] = progress

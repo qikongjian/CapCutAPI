@@ -23,6 +23,9 @@ IS_UPLOAD_DRAFT = False
 # 端口号
 PORT = 9000
 
+# 草稿文件夹路径
+DRAFT_FOLDER = ""
+
 OSS_CONFIG = []
 MP4_OSS_CONFIG=[]
 
@@ -59,6 +62,10 @@ if os.path.exists(CONFIG_FILE_PATH):
             # 更新MP4 OSS配置
             if "mp4_oss_config" in local_config:
                 MP4_OSS_CONFIG = local_config["mp4_oss_config"]
+            
+            # 更新草稿文件夹路径
+            if "draft_folder" in local_config:
+                DRAFT_FOLDER = local_config["draft_folder"]
 
     except (json.JSONDecodeError, IOError):
         # 配置文件加载失败，使用默认配置
