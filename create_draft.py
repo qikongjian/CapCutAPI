@@ -1,7 +1,7 @@
 import uuid
 import pyJianYingDraft as draft
 import time
-from draft_cache import DRAFT_CACHE, update_cache
+from tools.redis_cache import DRAFT_CACHE, update_cache
 
 def create_draft(draft_id, width=1920, height=1080):
     """

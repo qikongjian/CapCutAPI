@@ -5,7 +5,7 @@ import shutil
 from util import zip_draft, is_windows_path
 from oss import upload_to_oss
 from typing import Dict, Literal
-from draft_cache import DRAFT_CACHE
+from tools.redis_cache import DRAFT_CACHE
 from save_task_cache import DRAFT_TASKS, get_task_status, update_tasks_cache, update_task_field, increment_task_field, update_task_fields, create_task
 from downloader import download_audio, download_file, download_image, download_video
 from concurrent.futures import ThreadPoolExecutor, as_completed

@@ -9,6 +9,7 @@ import re
 from typing import Optional, Dict
 from pyJianYingDraft import exceptions
 from create_draft import get_or_create_draft
+from tools.redis_cache import update_cache
 
 def add_image_impl(
     image_url: str,
@@ -225,6 +226,9 @@ def add_image_impl(
     
     # Add image segment to track
     script.add_segment(image_segment, track_name=track_name)
+    
+    # 重要：将修改后的 script 重新保存到缓存中
+    update_cache(draft_id, script)
     
     return {
         "draft_id": draft_id,

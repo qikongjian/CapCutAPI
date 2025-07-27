@@ -6,3 +6,4 @@ oss2
 uiautomation
 qiniu
 python-dotenv
+redis

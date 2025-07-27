@@ -3,6 +3,7 @@ from pyJianYingDraft import trange
 from typing import Optional, Dict
 from pyJianYingDraft import exceptions
 from create_draft import get_or_create_draft
+from tools.redis_cache import update_cache
 from util import generate_draft_url
 
 def add_sticker_impl(
@@ -79,6 +80,9 @@ def add_sticker_impl(
 
     # Add sticker segment to track
     script.add_segment(sticker_segment, track_name=track_name)
+
+    # 重要：将修改后的 script 重新保存到缓存中
+    update_cache(draft_id, script)
 
     return {
         "draft_id": draft_id,

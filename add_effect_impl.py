@@ -2,6 +2,7 @@ from pyJianYingDraft import trange, Video_scene_effect_type, Video_character_eff
 import pyJianYingDraft as draft
 from typing import Optional, Dict, List, Union
 from create_draft import get_or_create_draft
+from tools.redis_cache import update_cache
 from util import generate_draft_url
 from settings import IS_CAPCUT_ENV
 
@@ -66,6 +67,9 @@ def add_effect_impl(
 
     # Add effect
     script.add_effect(effect_enum, t_range, params=params[::-1], track_name=track_name)
+
+    # 重要：将修改后的 script 重新保存到缓存中
+    update_cache(draft_id, script)
 
     return {
         "draft_id": draft_id,

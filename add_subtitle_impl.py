@@ -1,6 +1,7 @@
 import pyJianYingDraft as draft
 from util import generate_draft_url, hex_to_rgb
 from create_draft import get_or_create_draft
+from tools.redis_cache import update_cache
 from pyJianYingDraft.text_segment import TextBubble, TextEffect
 from typing import Optional
 import requests
@@ -162,6 +163,9 @@ def add_subtitle_impl(
         bubble=text_bubble,
         effect=text_effect
     )
+
+    # 重要：将修改后的 script 重新保存到缓存中
+    update_cache(draft_id, script)
 
     return {
         "draft_id": draft_id,

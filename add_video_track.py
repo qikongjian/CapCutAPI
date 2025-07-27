@@ -8,6 +8,7 @@ import re
 from typing import Optional, Dict
 from pyJianYingDraft import exceptions
 from create_draft import get_or_create_draft
+from tools.redis_cache import update_cache
 
 def add_video_track(
     video_url: str,
@@ -214,6 +215,9 @@ def add_video_track(
     #     imported_track.add_segment(video_segment)
     # else:
     script.add_segment(video_segment, track_name=track_name)
+    
+    # 重要：将修改后的 script 重新保存到缓存中
+    update_cache(draft_id, script)
     
     return {
         "draft_id": draft_id,

@@ -1,6 +1,7 @@
 import pyJianYingDraft as draft
 from pyJianYingDraft import exceptions
 from create_draft import get_or_create_draft
+from tools.redis_cache import update_cache
 from typing import Optional, Dict, List
 
 from util import generate_draft_url
@@ -98,6 +99,9 @@ def add_video_keyframe_impl(
                 added_count += 1
             except Exception as e:
                 raise Exception(f"Failed to add keyframe #{i+1} (property_type={kf['property_type']}, time={kf['time']}, value={kf['value']}): {str(e)}")
+        
+        # 重要：将修改后的 script 重新保存到缓存中
+        update_cache(draft_id, script)
         
         result = {
             "draft_id": draft_id,

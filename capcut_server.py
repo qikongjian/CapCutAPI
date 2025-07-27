@@ -1,3 +1,8 @@
+from dotenv import load_dotenv
+
+# 首先加载 .env 文件，确保后续导入的模块能正确读取环境变量
+load_dotenv()
+
 import requests
 from flask import Flask, request, jsonify, Response
 from datetime import datetime
@@ -59,7 +64,7 @@ if IS_WINDOWS:
 
 from settings.local import IS_CAPCUT_ENV, DRAFT_DOMAIN, PREVIEW_ROUTER, PORT
 
-from draft_cache import DRAFT_CACHE
+from tools.redis_cache import DRAFT_CACHE
 
 # 设置日志
 logger = logging.getLogger(__name__)

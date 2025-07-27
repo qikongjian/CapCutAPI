@@ -4,13 +4,6 @@ import logging
 from typing import Optional, Tuple, Dict, Any
 import oss2
 
-# 尝试加载.env文件
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-except ImportError:
-    pass
-
 # 配置日志
 logger = logging.getLogger(__name__)
 

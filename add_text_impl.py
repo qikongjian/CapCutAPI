@@ -5,6 +5,7 @@ from pyJianYingDraft import trange, Font_type
 from typing import Optional
 from pyJianYingDraft import exceptions
 from create_draft import get_or_create_draft
+from tools.redis_cache import update_cache
 from pyJianYingDraft.text_segment import TextBubble, TextEffect
 
 def add_text_impl(
@@ -208,6 +209,9 @@ def add_text_impl(
 
     # Add text segment to track
     script.add_segment(text_segment, track_name=track_name)
+
+    # 重要：将修改后的 script 重新保存到缓存中
+    update_cache(draft_id, script)
 
     return {
         "draft_id": draft_id,

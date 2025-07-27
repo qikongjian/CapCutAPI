@@ -7,6 +7,7 @@ import re
 from typing import Optional, Dict, Tuple, List
 from pyJianYingDraft import exceptions, Audio_scene_effect_type, Tone_effect_type, Speech_to_song_type, CapCut_Voice_filters_effect_type,CapCut_Voice_characters_effect_type,CapCut_Speech_to_song_effect_type, trange
 from create_draft import get_or_create_draft
+from tools.redis_cache import update_cache
 from settings.local import IS_CAPCUT_ENV
 
 def add_audio_track(
@@ -147,6 +148,9 @@ def add_audio_track(
     
     # Add audio segment to track
     script.add_segment(audio_segment, track_name=track_name)
+    
+    # 重要：将修改后的 script 重新保存到缓存中
+    update_cache(draft_id, script)
     
     return {
         "draft_id": draft_id,
