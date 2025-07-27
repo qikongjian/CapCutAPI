@@ -39,8 +39,8 @@ def upload_to_qiniu(data: bytes, file_extension: str = "mp4", timeout: int = 300
         
         logger.info(f"上传超时设置: {timeout} 秒")
         
-        # 使用put_data上传，设置超时
-        ret, info = qiniu.put_data(token, filename, data, policy=None, check_crc=False)
+        # 使用put_data上传，移除不兼容的参数
+        ret, info = qiniu.put_data(token, filename, data)
         
         if ret is None:
             error_msg = f"上传到七牛云失败: {info}"

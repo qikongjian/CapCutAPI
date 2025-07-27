@@ -290,6 +290,16 @@ class Jianying_controller:
         if not os.path.exists(downloads_dir):
             os.makedirs(downloads_dir)
         
+        # 检查是否已有同名文件，有的话先删除
+        target_filename = f"{draft_name}.mp4"
+        target_filepath = os.path.join(downloads_dir, target_filename)
+        if os.path.exists(target_filepath):
+            try:
+                os.remove(target_filepath)
+                logger.info(f"删除已存在的文件: {target_filepath}")
+            except Exception as e:
+                logger.warning(f"删除已存在文件失败: {e}")
+        
         # 初始化该draft_name的进度信息
         progress_data = {
             "status": "exporting", 
@@ -511,11 +521,8 @@ class Jianying_controller:
             time.sleep(1)
         time.sleep(2)
 
-        # 生成最终输出路径（使用时间戳避免冲突）
-        timestamp = int(time.time())
-        safe_draft_name = "".join(c for c in draft_name if c.isalnum() or c in (' ', '-', '_')).rstrip()
-        filename = f"{safe_draft_name}_{timestamp}.mp4"
-        final_export_path = os.path.join(downloads_dir, filename)
+        # 生成最终输出路径（使用草稿名作为文件名）
+        final_export_path = target_filepath
         
         # 移动导出的文件到downloads目录
         shutil.move(export_path, final_export_path)

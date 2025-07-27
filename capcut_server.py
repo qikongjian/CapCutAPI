@@ -22,6 +22,8 @@ import codecs
 import platform
 import sys
 import os
+import time
+import logging
 from add_audio_track import add_audio_track
 from add_video_track import add_video_track
 from add_text_impl import add_text_impl
@@ -50,6 +52,10 @@ if IS_WINDOWS:
 from settings.local import IS_CAPCUT_ENV, DRAFT_DOMAIN, PREVIEW_ROUTER, PORT
 
 from draft_cache import DRAFT_CACHE
+
+# 设置日志
+logger = logging.getLogger(__name__)
+
 app = Flask(__name__)
  
 @app.route('/add_video', methods=['POST'])
@@ -1559,6 +1565,99 @@ def export_draft():
         
     except Exception as e:
         error_message = f"导出草稿时出错: {str(e)}"
+        result["error"] = error_message
+        return jsonify(result)
+
+@app.route('/retry_upload', methods=['POST'])
+def retry_upload():
+    """重试上传本地视频文件到七牛云"""
+    data = request.get_json()
+    
+    # Get required parameters
+    draft_name = data.get('draft_name')
+    
+    result = {
+        "success": False,
+        "output": "",
+        "error": ""
+    }
+    
+    # Validate required parameters
+    if not draft_name:
+        error_message = "Hi, the required parameter 'draft_name' is missing. Please add it and try again."
+        result["error"] = error_message
+        return jsonify(result)
+    
+    try:
+        # 构建下载目录路径和目标文件路径
+        project_root = os.path.dirname(__file__)
+        downloads_dir = os.path.join(project_root, "downloads")
+        target_file = os.path.join(downloads_dir, f"{draft_name}.mp4")
+        
+        if not os.path.exists(target_file):
+            error_message = f"File not found: {draft_name}.mp4 in downloads directory"
+            result["error"] = error_message
+            return jsonify(result)
+        
+        # 读取文件并上传
+        with open(target_file, 'rb') as f:
+            video_data = f.read()
+        
+        # 开始上传
+        from tools.file_tools import upload_to_qiniu
+        video_url = upload_to_qiniu(video_data, "mp4")
+        
+        if video_url:
+            # 上传成功，更新进度缓存
+            from export_progress_cache import export_progress_cache
+            export_progress_cache.set_progress(draft_name, {
+                "status": "finished",
+                "percent": 100.0,
+                "message": "重试上传成功",
+                "video_url": video_url,
+                "start_time": time.time(),
+                "elapsed": 0
+            })
+            
+            # 删除本地视频文件
+            try:
+                os.remove(target_file)
+                logger.info(f"删除本地视频文件: {target_file}")
+                delete_video_message = ", 本地视频文件已删除"
+            except Exception as e:
+                logger.warning(f"删除本地视频文件失败: {e}")
+                delete_video_message = f", 删除本地视频文件失败: {str(e)}"
+            
+            # 删除草稿文件夹
+            try:
+                from settings.local import DRAFT_FOLDER
+                import shutil
+                if DRAFT_FOLDER and os.path.exists(DRAFT_FOLDER):
+                    draft_project_path = os.path.join(DRAFT_FOLDER, draft_name)
+                    if os.path.exists(draft_project_path):
+                        shutil.rmtree(draft_project_path)
+                        logger.info(f"删除草稿项目: {draft_project_path}")
+                        delete_draft_message = ", 草稿项目已删除"
+                    else:
+                        delete_draft_message = ", 草稿项目不存在"
+                else:
+                    delete_draft_message = ", 草稿根目录未配置"
+            except Exception as e:
+                logger.warning(f"删除草稿项目失败: {e}")
+                delete_draft_message = f", 删除草稿项目失败: {str(e)}"
+            
+            result["success"] = True
+            result["output"] = {
+                "video_url": video_url,
+                "message": f"重试上传成功{delete_video_message}{delete_draft_message}"
+            }
+        else:
+            result["error"] = "重试上传失败，请检查七牛云配置和网络连接"
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        error_message = f"重试上传时出错: {str(e)}"
         result["error"] = error_message
         return jsonify(result)
 
