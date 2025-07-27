@@ -35,6 +35,14 @@ from add_effect_impl import add_effect_impl
 from add_sticker_impl import add_sticker_impl
 from create_draft import create_draft
 from util import generate_draft_url as utilgenerate_draft_url
+from tools.file_tools import upload_to_qiniu
+# 直接从缓存读取进度，不唤起剪映应用
+from export_progress_cache import export_progress_cache
+from settings.local import DRAFT_FOLDER
+import shutil
+# 线程本地存储剪映控制器实例
+import threading
+thread_local = threading.local()
 
 # 平台检测和条件性导入
 IS_WINDOWS = platform.system() == 'Windows'
@@ -1446,8 +1454,6 @@ def delete_draft():
         return jsonify(result)
     
     try:
-        from draft_cache import DRAFT_CACHE
-        
         # Check if draft exists in cache
         if draft_id in DRAFT_CACHE:
             # Delete from cache
@@ -1468,11 +1474,6 @@ def delete_draft():
         error_message = f"Error occurred while deleting draft: {str(e)}."
         result["error"] = error_message
         return jsonify(result)
-
-
-# 线程本地存储剪映控制器实例
-import threading
-thread_local = threading.local()
 
 def get_jianying_controller():
     """获取剪映控制器实例（线程安全）"""
@@ -1604,7 +1605,6 @@ def retry_upload():
             video_data = f.read()
         
         # 开始上传
-        from tools.file_tools import upload_to_qiniu
         video_url = upload_to_qiniu(video_data, "mp4")
         
         if video_url:
@@ -1630,8 +1630,6 @@ def retry_upload():
             
             # 删除草稿文件夹
             try:
-                from settings.local import DRAFT_FOLDER
-                import shutil
                 if DRAFT_FOLDER and os.path.exists(DRAFT_FOLDER):
                     draft_project_path = os.path.join(DRAFT_FOLDER, draft_name)
                     if os.path.exists(draft_project_path):
@@ -1679,9 +1677,6 @@ def get_export_progress():
     }
     
     try:
-        # 直接从缓存读取进度，不唤起剪映应用
-        from export_progress_cache import export_progress_cache
-        
         if draft_name is None:
             # 获取最新的导出进度
             progress = export_progress_cache.get_latest_progress()

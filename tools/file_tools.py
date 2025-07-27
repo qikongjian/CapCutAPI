@@ -19,6 +19,7 @@ def upload_to_qiniu(data: bytes, file_extension: str = "mp4", timeout: int = 300
     Returns:
         文件URL
     """
+    
     try:
         q = qiniu.Auth(os.getenv('QINIU_ACCESS_KEY', 'Ef8cxF6Hg01m6wuLpMpUgICXcztrdsXKTJzjeoro'), os.getenv('QINIU_SECRET_KEY', '-VcHBrdszBch8hBKXw4itiF-dpCIcAc91LCb_pn3'))
         token = q.upload_token(os.getenv('QINIU_BUCKET_NAME', 'risingfalling'))
@@ -39,7 +40,7 @@ def upload_to_qiniu(data: bytes, file_extension: str = "mp4", timeout: int = 300
         
         logger.info(f"上传超时设置: {timeout} 秒")
         
-        # 使用put_data上传，移除不兼容的参数
+        # 使用put_data上传
         ret, info = qiniu.put_data(token, filename, data)
         
         if ret is None:
@@ -68,3 +69,10 @@ def download_file_to_temp(url) -> str:
     with open(file_path, "wb") as f:
         f.write(response.content)
     return file_path
+
+if __name__ == "__main__":
+    # 测试代码
+    with open("/Users/lishuqing/Downloads/badcase-两个马头.mp4", "rb") as f:
+        video_bytes = f.read()
+    url = upload_to_qiniu(video_bytes, "mp4")
+    print(url)
