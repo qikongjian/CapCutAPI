@@ -64,12 +64,16 @@ if IS_WINDOWS:
 
 from settings.local import IS_CAPCUT_ENV, DRAFT_DOMAIN, PREVIEW_ROUTER, PORT
 
-from tools.redis_cache import DRAFT_CACHE
+from tools.redis_cache import DRAFT_CACHE, redis_cache
+from tools.redis_queue import export_queue_manager, export_task_processor
 
 # 设置日志
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
+
+# 启动导出任务处理器
+export_task_processor.start_processor()
  
 @app.route('/add_video', methods=['POST'])
 def add_video():
@@ -1701,5 +1705,135 @@ def get_export_progress():
         result["error"] = error_message
         return jsonify(result)
 
+@app.route('/submit_export_task', methods=['POST'])
+def submit_export_task():
+    """提交导出任务到Redis队列"""
+    data = request.get_json()
+    
+    # 获取必需参数
+    draft_id = data.get('draft_id')
+    resolution = data.get('resolution')
+    framerate = data.get('framerate')
+    timeout = data.get('timeout', 12000)
+    
+    result = {
+        "success": False,
+        "output": "",
+        "error": ""
+    }
+    
+    # 验证必需参数
+    if not draft_id:
+        error_message = "缺少必需参数 'draft_id'"
+        result["error"] = error_message
+        return jsonify(result)
+    
+    try:
+        # 准备任务数据
+        task_data = {
+            "draft_id": draft_id,
+            "draft_name": draft_id,
+            "resolution": resolution,
+            "framerate": framerate,
+            "timeout": timeout
+        }
+        
+        # 提交任务到队列
+        task_id = export_queue_manager.submit_export_task(task_data)
+        
+        result["success"] = True
+        result["output"] = {
+            "draft_id": task_id,
+            "draft_name": draft_id,
+            "message": "导出任务已提交到队列"
+        }
+        return jsonify(result)
+        
+    except Exception as e:
+        error_message = f"提交导出任务失败: {str(e)}"
+        result["error"] = error_message
+        return jsonify(result)
+
+@app.route('/get_export_queue_info', methods=['GET'])
+def get_export_queue_info():
+    """获取导出队列状态信息"""
+    result = {
+        "success": False,
+        "output": "",
+        "error": ""
+    }
+    
+    try:
+        queue_info = export_queue_manager.get_queue_info()
+        
+        result["success"] = True
+        result["output"] = queue_info
+        return jsonify(result)
+        
+    except Exception as e:
+        error_message = f"获取队列信息失败: {str(e)}"
+        result["error"] = error_message
+        return jsonify(result)
+
+@app.route('/get_export_task_result', methods=['POST'])
+def get_export_task_result():
+    """获取导出任务结果"""
+    data = request.get_json()
+    
+    # 获取必需参数
+    draft_id = data.get('draft_id')
+    
+    result = {
+        "success": False,
+        "output": "",
+        "error": ""
+    }
+    
+    # 验证必需参数
+    if not draft_id:
+        error_message = "缺少必需参数 'draft_id'"
+        result["error"] = error_message
+        return jsonify(result)
+    
+    try:
+        # 从Redis获取任务结果
+        result_key = f"export_result:{draft_id}"
+        task_result_json = redis_cache.redis_client.get(result_key)
+        
+        if task_result_json:
+            task_result = json.loads(task_result_json.decode('utf-8'))
+            result["success"] = True
+            result["output"] = task_result
+        else:
+            # 检查任务是否还在处理中
+            processing_task_json = redis_cache.redis_client.hget("export_processing", draft_id)
+            if processing_task_json:
+                processing_task = json.loads(processing_task_json.decode('utf-8'))
+                result["success"] = True
+                result["output"] = {
+                    "draft_id": draft_id,
+                    "status": "processing",
+                    "message": "任务正在处理中",
+                    "processing_started_at": processing_task.get('processing_started_at')
+                }
+            else:
+                result["success"] = True
+                result["output"] = {
+                    "draft_id": draft_id,
+                    "status": "not_found",
+                    "message": "任务不存在或已过期"
+                }
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        error_message = f"获取任务结果失败: {str(e)}"
+        result["error"] = error_message
+        return jsonify(result)
+
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=PORT)
+    try:
+        app.run(host='0.0.0.0', port=PORT)
+    finally:
+        # 应用关闭时停止任务处理器
+        export_task_processor.stop_processor()
