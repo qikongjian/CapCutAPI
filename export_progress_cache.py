@@ -18,12 +18,12 @@ logger = logging.getLogger(__name__)
 class ExportProgressCache:
     """导出进度缓存管理器（完全基于 Redis）"""
     
-    def __init__(self, cache_duration: int = 1800):
+    def __init__(self, cache_duration: int = 86400):
         """
         初始化导出进度缓存
         
         Args:
-            cache_duration: 缓存过期时间（秒），默认30分钟
+            cache_duration: 缓存过期时间（秒），一天
         """
         self.cache_duration = cache_duration
         
